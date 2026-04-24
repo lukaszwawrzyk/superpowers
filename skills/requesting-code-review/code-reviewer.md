@@ -56,7 +56,7 @@ git diff {BASE_SHA}..{HEAD_SHA}
 
 **Production Readiness:**
 - Migration strategy (if schema changes)?
-- Backward compatibility considered?
+- Backward compatibility preserved only where a real contract or requirement demands it?
 - Documentation complete?
 - No obvious bugs?
 

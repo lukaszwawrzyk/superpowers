@@ -106,7 +106,9 @@ When multiple skills could apply, use this order:
 
 ## Skill Types
 
-**Rigid** (TDD, debugging): Follow exactly. Don't adapt away discipline.
+**Rigid** (debugging, verification): Follow exactly when the skill applies.
+
+**Contextual** (TDD, planning, review): Apply the discipline, but adapt the intensity to the risk, scope, and explicit user preferences.
 
 **Flexible** (patterns): Adapt principles to context.
 
