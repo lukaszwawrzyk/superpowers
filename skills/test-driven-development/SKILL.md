@@ -13,6 +13,23 @@ Use test-first when it materially improves confidence. Prefer the highest-level 
 
 Avoid ritualized TDD. The goal is confidence and fast feedback, not ceremony.
 
+## Repository Testing Philosophy Comes First
+
+Before adding or changing tests, look for project rules about testing style and
+quality: `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `docs/rules/*`, testing
+guides, existing nearby tests, and build/check wrappers. Those rules override
+this skill.
+
+If a behavior is worth testing, write a test that fits the project's
+architecture and testing philosophy. Choose the right level for the situation:
+end-to-end, integration, contract, unit, or a focused regression test. Do not
+add a low-value test just to satisfy the idea of TDD.
+
+If you cannot honestly write a project-quality test but need a temporary test
+to support implementation or diagnosis, you may write one. Treat it as
+scaffolding: after the implementation passes and the behavior is otherwise
+verified, delete the temporary test. Do not leave bad tests in the suite.
+
 ## When to Use
 
 **Strong fit:**
@@ -32,6 +49,7 @@ Avoid ritualized TDD. The goal is confidence and fast feedback, not ceremony.
 - Prefer one high-level or integration-style test over many low-level tests when it covers the behavior clearly
 - Add or update tests when they buy confidence; do not manufacture test churn for trivial changes
 - If an existing test already covers the path, extending it can be better than writing a new micro-test
+- Follow the repository's testing philosophy for test type, scope, naming, fixtures, and allowed mocks
 
 If the change is tiny and low-risk, skipping test-first can be correct. Say that explicitly instead of pretending you are doing TDD.
 
@@ -45,11 +63,12 @@ Default test shape:
 - Start with the highest-level automated test that proves the behavior
 - Drop to lower-level unit tests only when that is the clearest or cheapest option
 - For tiny low-risk changes, document why no new automated test is needed and validate in the lightest sensible way
+- If only a temporary diagnostic test is honest, use it locally and remove it before completion
 
 Default stance:
 - Prefer one good end-to-end, integration, or workflow-level test over many implementation-shaped unit tests
 - Skip new automated tests for trivial, low-risk edits when lightweight verification is enough
-- Preserve backward compatibility only when there is an explicit contract, migration requirement, or user request
+- Preserve backward compatibility only when there is a migration requirement or user request
 
 ## Red-Green-Refactor
 
@@ -273,8 +292,9 @@ Tests-after can still be useful. They just are not the same as test-first.
 - Choosing low-level tests that mirror implementation when one higher-level test would prove the behavior
 - Adding tests mainly to satisfy process rather than reduce risk
 - Claiming strong confidence without any meaningful verification
-- Preserving old behavior "just in case" without a real contract or requirement
+- Preserving old behavior "just in case" without a migration requirement or user request
 - Treating every bugfix as a mandate to build a large new test harness
+- Leaving a low-value or architecture-hostile test in the suite because it helped during implementation
 
 These mean the testing strategy is off. Fix the strategy; do not escalate ceremony by default.
 
@@ -323,10 +343,11 @@ Before marking work complete:
 - [ ] Used a high-level automated test when behavior was non-trivial and automation bought confidence
 - [ ] If test-first was used, watched the test fail for the expected reason
 - [ ] If no new automated test was added, recorded why lightweight verification was sufficient
+- [ ] Any temporary diagnostic/scaffolding tests were removed before completion
 - [ ] All relevant verification passes
 - [ ] Output is clean enough to trust the result
 - [ ] Tests exercise real behavior when practical
-- [ ] Backward compatibility was only preserved when explicitly required
+- [ ] Backward compatibility was only preserved for a migration requirement or user request
 
 If the checklist doesn't support the current verification strategy, adjust the strategy or lower the claim.
 
@@ -356,9 +377,11 @@ When adding mocks or test utilities, read @testing-anti-patterns.md to avoid com
 
 ```
 Match verification effort to change risk.
+Follow the repository's testing philosophy.
 Prefer the highest-level proof.
+Delete temporary low-quality tests.
 Skip ceremony for tiny low-risk edits.
-Default to compatibility only by explicit requirement.
+Default to compatibility only for migration requirements or user requests.
 ```
 
 When in doubt, optimize for confidence per minute, not ritual.
