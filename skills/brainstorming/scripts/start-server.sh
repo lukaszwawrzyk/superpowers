@@ -2,10 +2,10 @@
 # Start the brainstorm server and output connection info.
 # Usage: start-server.sh [--project-dir <path>] [--host <bind-host>] [--url-host <display-host>]
 #
-# This fork is used from Exeggcute/Codex tool sessions. Run the server in the
-# foreground so the tool session owns its lifetime, and do not set
+# This fork is used from Exeggcute/Codex tool sessions. Start the server as a
+# detached process so it survives after the agent response, and do not set
 # BRAINSTORM_OWNER_PID because short-lived launcher processes can disappear
-# while the tool session is still active.
+# while the browser companion should keep running.
 
 set -euo pipefail
 
@@ -53,13 +53,30 @@ fi
 
 STATE_DIR="${SESSION_DIR}/state"
 PID_FILE="${STATE_DIR}/server.pid"
+LOG_FILE="${STATE_DIR}/server.log"
 
 mkdir -p "${SESSION_DIR}/content" "$STATE_DIR"
-echo "$$" > "$PID_FILE"
 
 cd "$SCRIPT_DIR"
-exec env \
-  BRAINSTORM_DIR="$SESSION_DIR" \
-  BRAINSTORM_HOST="$BIND_HOST" \
-  BRAINSTORM_URL_HOST="$URL_HOST" \
-  node server.cjs
+setsid -f bash -c '
+  BRAINSTORM_DIR="$1" \
+  BRAINSTORM_HOST="$2" \
+  BRAINSTORM_URL_HOST="$3" \
+    node server.cjs > "$4" 2>&1 &
+  echo "$!" > "$5"
+' -- "$SESSION_DIR" "$BIND_HOST" "$URL_HOST" "$LOG_FILE" "$PID_FILE"
+
+for _ in $(seq 1 50); do
+  if [[ -f "$STATE_DIR/server-info" ]]; then
+    cat "$STATE_DIR/server-info"
+    exit 0
+  fi
+  if [[ -f "$STATE_DIR/server-stopped" ]]; then
+    echo "{\"error\": \"Server stopped during startup\", \"log\": \"$LOG_FILE\"}"
+    exit 1
+  fi
+  sleep 0.1
+done
+
+echo "{\"error\": \"Server failed to start within 5 seconds\", \"log\": \"$LOG_FILE\"}"
+exit 1

@@ -50,9 +50,18 @@ Save `screen_dir` and `state_dir` from the response. Tell user to open the URL.
 
 **Note:** Pass the project root as `--project-dir` so mockups persist in `.superpowers/brainstorm/` and survive server restarts. Without it, files go to `/tmp` and get cleaned up. Remind the user to add `.superpowers/` to `.gitignore` if it's not already there.
 
-The wrapper runs the Node server in the foreground inside the tool session and
-does not bind lifecycle to the short-lived launcher process. Keep the returned
-tool session running while the user uses the browser companion.
+The wrapper starts the Node server as a detached process and does not bind
+lifecycle to the short-lived launcher process. It waits for startup and prints
+the same `server-started` JSON that is written to `state/server-info`.
+
+After writing a screen, verify with a regular GET request:
+
+```bash
+rtk curl -sS http://localhost:<port>/
+```
+
+Do not use `curl -I`: the server is intended to serve `GET /`, and HEAD checks
+can report failure even when the browser page works.
 
 ## The Loop
 
