@@ -23,7 +23,7 @@ You MUST create a task for each of these items and complete them in order:
 
 1. **Explore project context** — check files, docs, recent commits
 2. **Ask clarifying questions** — one at a time, understand purpose/constraints/success criteria
-3. **Propose 2-3 approaches** — with trade-offs and your recommendation
+3. **Choose the approach path** — present alternatives only when each is genuinely viable
 4. **Present design** — in sections scaled to their complexity, get user approval after each section
 5. **Write design doc** — save to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit
 6. **Spec self-review** — quick inline check for placeholders, contradictions, ambiguity, scope (see below)
@@ -36,7 +36,7 @@ You MUST create a task for each of these items and complete them in order:
 digraph brainstorming {
     "Explore project context" [shape=box];
     "Ask clarifying questions" [shape=box];
-    "Propose 2-3 approaches" [shape=box];
+    "Choose approach path" [shape=box];
     "Present design sections" [shape=box];
     "User approves design?" [shape=diamond];
     "Write design doc" [shape=box];
@@ -45,8 +45,8 @@ digraph brainstorming {
     "Invoke writing-plans skill" [shape=doublecircle];
 
     "Explore project context" -> "Ask clarifying questions";
-    "Ask clarifying questions" -> "Propose 2-3 approaches";
-    "Propose 2-3 approaches" -> "Present design sections";
+    "Ask clarifying questions" -> "Choose approach path";
+    "Choose approach path" -> "Present design sections";
     "Present design sections" -> "User approves design?";
     "User approves design?" -> "Present design sections" [label="no, revise"];
     "User approves design?" -> "Write design doc" [label="yes"];
@@ -73,9 +73,11 @@ digraph brainstorming {
 
 **Exploring approaches:**
 
-- Propose 2-3 different approaches with trade-offs
-- Present options conversationally with your recommendation and reasoning
-- Lead with your recommended option and explain why
+- Present multiple approaches only when every option is high-quality, consistent with the user's intent, and could reasonably be chosen
+- Do not manufacture 2-3 options when only one approach makes sense
+- Do not present throwaway options that are obviously worse, contradict prior discussion, or exist only to fill a list
+- If one approach is clearly right, skip the approach-choice question and explain that design directly
+- If multiple approaches are genuinely viable, present them conversationally with trade-offs, lead with your recommendation, and recommend one approach rather than a vague blend
 
 **Presenting the design:**
 
@@ -134,7 +136,7 @@ Wait for the user's response. If they request changes, make them and re-run the 
 - **One question at a time** - Don't overwhelm with multiple questions
 - **Multiple choice preferred** - Easier to answer than open-ended when possible
 - **YAGNI ruthlessly** - Remove unnecessary features from all designs
-- **Explore alternatives** - Always propose 2-3 approaches before settling
+- **Explore alternatives when real** - Present multiple approaches only when each could plausibly be selected
 - **Incremental validation** - Present design, get approval before moving on
 - **Be flexible** - Go back and clarify when something doesn't make sense
 
