@@ -4,7 +4,12 @@ Browser-based visual brainstorming companion for showing mockups, diagrams, and 
 
 ## When to Use
 
-Decide per-question, not per-session. The test: **would the user understand this better by seeing it than reading it?**
+Decide per-question, not per-session. Use terminal conversation by default.
+Start the server only when you have a concrete visual screen to show now, or
+when the next question genuinely needs visual comparison. Do not start it just
+because the broader topic is UI or design.
+
+The test: **would the user understand or decide this better by seeing it than reading it?**
 
 **Use the browser** when the content itself is visual:
 
@@ -23,6 +28,9 @@ Decide per-question, not per-session. The test: **would the user understand this
 - **Clarifying questions** — anything where the answer is words, not a visual preference
 
 A question *about* a UI topic is not automatically a visual question. "What kind of wizard do you want?" is conceptual — use the terminal. "Which of these wizard layouts feels right?" is visual — use the browser.
+
+If the next useful interaction is a normal text question, ask it in the
+terminal immediately. Do not pause to offer the browser companion first.
 
 ## How It Works
 
