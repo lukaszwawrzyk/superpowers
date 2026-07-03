@@ -112,44 +112,6 @@ const TELEMETRY_DISABLE_ENV_VARS = [
 const SUPERPOWERS_TELEMETRY_DISABLED = TELEMETRY_DISABLE_ENV_VARS.some(name => isTruthyEnv(process.env[name]));
 let ownerPid = process.env.BRAINSTORM_OWNER_PID ? Number(process.env.BRAINSTORM_OWNER_PID) : null;
 
-// Per-session secret key. The companion is reachable by any local browser tab
-// and, when bound to a non-loopback host, by any host that can route to it.
-// The key authenticates the real client uniformly across loopback, tunnel, and
-// remote binds — and defeats DNS rebinding — where a Host/Origin allowlist
-// cannot. It rides the served URL as ?key= and is mirrored into a cookie on
-// first load so same-origin subresources and the WebSocket carry it for free.
-// Persisted alongside the port (BRAINSTORM_TOKEN_FILE) so a restart keeps the
-// same key and an already-open tab's cookie still validates.
-const TOKEN_FILE = process.env.BRAINSTORM_TOKEN_FILE || null;
-function generateToken() {
-  return crypto.randomBytes(32).toString('hex');
-}
-
-function chmodOwnerOnly(file) {
-  try { fs.chmodSync(file, 0o600); } catch (e) { /* best effort */ }
-}
-
-function initialToken() {
-  if (process.env.BRAINSTORM_TOKEN) {
-    return { value: process.env.BRAINSTORM_TOKEN, source: 'env' };
-  }
-  if (TOKEN_FILE) {
-    try {
-      const t = fs.readFileSync(TOKEN_FILE, 'utf-8').trim();
-      if (/^[0-9a-f]{32,}$/i.test(t)) {
-        chmodOwnerOnly(TOKEN_FILE);
-        return { value: t, source: 'file' };
-      }
-    } catch (e) { /* no prior token recorded */ }
-  }
-  return { value: generateToken(), source: 'generated' };
-}
-
-const tokenInfo = initialToken();
-let TOKEN = tokenInfo.value;
-let tokenSource = tokenInfo.source;
-let COOKIE_NAME = 'brainstorm-key-' + PORT; // refined to the actual bound port in onListen
-
 const MIME_TYPES = {
   '.html': 'text/html', '.css': 'text/css', '.js': 'application/javascript',
   '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg',
@@ -173,30 +135,6 @@ h1 { color: #333; } p { color: #666; }
 </head>
 <body><!-- BRANDING --><h1>Brainstorm Companion</h1>
 <p>Waiting for the agent to push a screen...</p></body></html>`);
-}
-
-const FORBIDDEN_PAGE = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Session key required</title>
-<style>body { font-family: system-ui, sans-serif; padding: 2rem; max-width: 800px; margin: 0 auto; }
-h1 { color: #333; } p { color: #666; } code { background: #f0f0f0; padding: 0.1em 0.3em; border-radius: 4px; }</style>
-</head>
-<body><h1>Session key required</h1>
-<p>This page needs the full URL your coding agent gave you, including the
-<code>?key=&hellip;</code> part. Copy the complete URL and open it again.</p></body></html>`;
-
-function bootstrapPage(key) {
-  const jsonKey = JSON.stringify(String(key));
-  return `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Opening Brainstorm Companion</title></head>
-<body>
-<script>
-try { sessionStorage.setItem('brainstorm-session-key', ${jsonKey}); } catch (e) {}
-location.replace('/');
-</script>
-</body>
-</html>`;
 }
 
 const frameTemplate = fs.readFileSync(path.join(__dirname, 'frame-template.html'), 'utf-8');
@@ -284,7 +222,7 @@ function urlHostForHttp(host) {
 }
 
 function companionUrl() {
-  return 'http://' + urlHostForHttp(URL_HOST) + ':' + PORT + '/?key=' + TOKEN;
+  return 'http://' + urlHostForHttp(URL_HOST) + ':' + PORT + '/';
 }
 
 function browserLauncherForPlatform(url, {
@@ -316,51 +254,9 @@ function isRegularFileInsideContentDir(filePath) {
   return realFilePath.startsWith(realContentDir + path.sep);
 }
 
-// ========== Authentication ==========
-
-function timingSafeEqualStr(a, b) {
-  const ab = Buffer.from(String(a));
-  const bb = Buffer.from(String(b));
-  if (ab.length !== bb.length) return false;
-  return crypto.timingSafeEqual(ab, bb);
-}
-
-function parseCookies(header) {
-  const out = {};
-  if (!header) return out;
-  for (const part of header.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq < 0) continue;
-    out[part.slice(0, eq).trim()] = part.slice(eq + 1).trim();
-  }
-  return out;
-}
-
-// A request is authorized if it carries the session key as ?key= or as the
-// session cookie. Both are compared in constant time.
-function isAuthorized(req) {
-  const q = req.url.indexOf('?');
-  if (q >= 0) {
-    const params = new URLSearchParams(req.url.slice(q + 1));
-    if (params.has('key')) {
-      const key = params.get('key');
-      return Boolean(key && timingSafeEqualStr(key, TOKEN));
-    }
-  }
-  const cookie = parseCookies(req.headers['cookie'])[COOKIE_NAME];
-  if (cookie && timingSafeEqualStr(cookie, TOKEN)) return true;
-  return false;
-}
-
 function pathnameOf(url) {
   const q = url.indexOf('?');
   return q >= 0 ? url.slice(0, q) : url;
-}
-
-function queryKey(url) {
-  const q = url.indexOf('?');
-  if (q < 0) return null;
-  return new URLSearchParams(url.slice(q + 1)).get('key');
 }
 
 function securityHeaders(headers = {}) {
@@ -374,36 +270,12 @@ function securityHeaders(headers = {}) {
   };
 }
 
-function isAllowedWebSocketOrigin(req) {
-  const origin = req.headers.origin;
-  if (!origin) return true;
-  const host = req.headers.host;
-  if (!host) return false;
-  return origin === 'http://' + host;
-}
-
 // ========== HTTP Request Handler ==========
 
 function handleRequest(req, res) {
-  if (!isAuthorized(req)) {
-    res.writeHead(403, securityHeaders({ 'Content-Type': 'text/html; charset=utf-8' }));
-    res.end(FORBIDDEN_PAGE);
-    return;
-  }
-  touchActivity(); // only authorized requests count as activity
-
-  // Mirror the key into a cookie so same-origin subresources (/files/*) can
-  // authenticate after bootstrap. HttpOnly keeps it away from page scripts; the
-  // WebSocket Origin check below is what blocks cross-origin localhost injection.
-  res.setHeader('Set-Cookie',
-    COOKIE_NAME + '=' + TOKEN + '; HttpOnly; SameSite=Strict; Path=/');
-
+  touchActivity();
   const pathname = pathnameOf(req.url);
-  const keyFromQuery = queryKey(req.url);
-  if (req.method === 'GET' && pathname === '/' && keyFromQuery && timingSafeEqualStr(keyFromQuery, TOKEN)) {
-    res.writeHead(200, securityHeaders({ 'Content-Type': 'text/html; charset=utf-8' }));
-    res.end(bootstrapPage(keyFromQuery));
-  } else if (req.method === 'GET' && pathname === '/') {
+  if (req.method === 'GET' && pathname === '/') {
     const screenFile = getNewestScreen();
     let html = screenFile
       ? (raw => isFullDocument(raw) ? raw : wrapInFrame(raw))(fs.readFileSync(screenFile, 'utf-8'))
@@ -442,8 +314,6 @@ function handleRequest(req, res) {
 const clients = new Set();
 
 function handleUpgrade(req, socket) {
-  if (!isAuthorized(req) || !isAllowedWebSocketOrigin(req)) { socket.destroy(); return; }
-
   const key = req.headers['sec-websocket-key'];
   if (!key) { socket.destroy(); return; }
 
@@ -533,7 +403,7 @@ function maybeOpenBrowser() {
   if (!process.env.BRAINSTORM_OPEN) return; // opt-in: only after the user approves the companion
   if (HOST !== '127.0.0.1' && HOST !== 'localhost') return;
   if (clients.size > 0) return; // the user already opened it
-  const url = companionUrl(); // must carry the key or the gate 403s it
+  const url = companionUrl();
   const cp = require('child_process');
   // Operator-provided launcher: run as given (this env var is trusted operator input).
   if (process.env.BRAINSTORM_OPEN_CMD) {
@@ -661,22 +531,12 @@ function startServer() {
   let triedFallback = false;
 
   function onListen() {
-    // Cookie name keys on the ACTUAL bound port (may differ from the preferred
-    // one after an EADDRINUSE fallback) so it can't collide with another server's
-    // cookie in the shared localhost jar.
-    COOKIE_NAME = 'brainstorm-key-' + PORT;
-    // Record the bound port AND token so the next restart of this session reuses
-    // them — but ONLY when we got our preferred port. On a fallback we bound a
+    // Record the bound port so the next restart of this session reuses it —
+    // but ONLY when we got our preferred port. On a fallback we bound a
     // *different* port because someone else holds the preferred one; persisting
     // would overwrite the shared files and strand that other session's open tab.
     if (PORT_FILE && !triedFallback) {
       try { fs.writeFileSync(PORT_FILE, String(PORT)); } catch (e) { /* best effort */ }
-      if (TOKEN_FILE) {
-        try {
-          fs.writeFileSync(TOKEN_FILE, TOKEN, { mode: 0o600 });
-          chmodOwnerOnly(TOKEN_FILE);
-        } catch (e) { /* best effort */ }
-      }
     }
     const info = JSON.stringify({
       type: 'server-started', port: Number(PORT), host: HOST,
@@ -684,22 +544,13 @@ function startServer() {
       screen_dir: CONTENT_DIR, state_dir: STATE_DIR, idle_timeout_ms: IDLE_TIMEOUT_MS
     });
     console.log(info);
-    // server-info embeds the key — keep it owner-only.
-    fs.writeFileSync(path.join(STATE_DIR, 'server-info'), info + '\n', { mode: 0o600 });
+    fs.writeFileSync(path.join(STATE_DIR, 'server-info'), info + '\n');
   }
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE' && !triedFallback) {
-      if (tokenSource === 'env') {
-        console.error('Server failed to bind: preferred port is in use and BRAINSTORM_TOKEN is set; refusing fallback with explicit token');
-        process.exit(1);
-      }
       triedFallback = true;
       PORT = randomPort();
-      if (tokenSource === 'file') {
-        TOKEN = generateToken();
-        tokenSource = 'generated-fallback';
-      }
       server.listen(PORT, HOST, onListen);
     } else {
       console.error('Server failed to bind:', err.message);

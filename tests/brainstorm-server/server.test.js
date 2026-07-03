@@ -20,9 +20,6 @@ const TEST_PORT = 3334;
 const TEST_DIR = '/tmp/brainstorm-test';
 const CONTENT_DIR = path.join(TEST_DIR, 'content');
 const STATE_DIR = path.join(TEST_DIR, 'state');
-// Fixed session key so the test client can authenticate (see auth.test.js for
-// the security behavior itself; here we just need authorized requests).
-const TOKEN = 'testtoken-server-0123456789abcdef';
 
 function cleanup() {
   if (fs.existsSync(TEST_DIR)) {
@@ -36,8 +33,7 @@ async function sleep(ms) {
 
 async function fetch(url) {
   return new Promise((resolve, reject) => {
-    const headers = { Cookie: `brainstorm-key-${TEST_PORT}=${TOKEN}` };
-    http.get(url, { headers }, (res) => {
+    http.get(url, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => resolve({
@@ -51,7 +47,7 @@ async function fetch(url) {
 
 function startServer() {
   return spawn('node', [SERVER_PATH], {
-    env: { ...process.env, BRAINSTORM_PORT: TEST_PORT, BRAINSTORM_DIR: TEST_DIR, BRAINSTORM_TOKEN: TOKEN }
+    env: { ...process.env, BRAINSTORM_PORT: TEST_PORT, BRAINSTORM_DIR: TEST_DIR }
   });
 }
 
@@ -88,6 +84,10 @@ function serverStartedMessage(out) {
   const line = out.trim().split('\n').find(l => l.includes('server-started'));
   assert(line, 'server-started JSON should be present');
   return JSON.parse(line);
+}
+
+function wsUrl() {
+  return `ws://localhost:${TEST_PORT}/`;
 }
 
 function assertStartedOnExpectedPort(out) {
@@ -329,7 +329,7 @@ async function runTests() {
     console.log('\n--- WebSocket Communication ---');
 
     await test('accepts WebSocket upgrade on /', async () => {
-      const ws = new WebSocket(`ws://localhost:${TEST_PORT}/?key=${TOKEN}`);
+      const ws = new WebSocket(wsUrl());
       await new Promise((resolve, reject) => {
         ws.on('open', resolve);
         ws.on('error', reject);
@@ -339,7 +339,7 @@ async function runTests() {
 
     await test('relays user events to stdout with source field', async () => {
       stdoutAccum = '';
-      const ws = new WebSocket(`ws://localhost:${TEST_PORT}/?key=${TOKEN}`);
+      const ws = new WebSocket(wsUrl());
       await new Promise(resolve => ws.on('open', resolve));
 
       ws.send(JSON.stringify({ type: 'click', text: 'Test Button' }));
@@ -355,7 +355,7 @@ async function runTests() {
       const eventsFile = path.join(STATE_DIR, 'events');
       if (fs.existsSync(eventsFile)) fs.unlinkSync(eventsFile);
 
-      const ws = new WebSocket(`ws://localhost:${TEST_PORT}/?key=${TOKEN}`);
+      const ws = new WebSocket(wsUrl());
       await new Promise(resolve => ws.on('open', resolve));
 
       ws.send(JSON.stringify({ type: 'click', choice: 'b', text: 'Option B' }));
@@ -373,7 +373,7 @@ async function runTests() {
       const eventsFile = path.join(STATE_DIR, 'events');
       if (fs.existsSync(eventsFile)) fs.unlinkSync(eventsFile);
 
-      const ws = new WebSocket(`ws://localhost:${TEST_PORT}/?key=${TOKEN}`);
+      const ws = new WebSocket(wsUrl());
       await new Promise(resolve => ws.on('open', resolve));
 
       ws.send(JSON.stringify({ type: 'hover', text: 'Something' }));
@@ -385,8 +385,8 @@ async function runTests() {
     });
 
     await test('handles multiple concurrent WebSocket clients', async () => {
-      const ws1 = new WebSocket(`ws://localhost:${TEST_PORT}/?key=${TOKEN}`);
-      const ws2 = new WebSocket(`ws://localhost:${TEST_PORT}/?key=${TOKEN}`);
+      const ws1 = new WebSocket(wsUrl());
+      const ws2 = new WebSocket(wsUrl());
       await Promise.all([
         new Promise(resolve => ws1.on('open', resolve)),
         new Promise(resolve => ws2.on('open', resolve))
@@ -411,7 +411,7 @@ async function runTests() {
     });
 
     await test('cleans up closed clients from broadcast list', async () => {
-      const ws1 = new WebSocket(`ws://localhost:${TEST_PORT}/?key=${TOKEN}`);
+      const ws1 = new WebSocket(wsUrl());
       await new Promise(resolve => ws1.on('open', resolve));
       ws1.close();
       await sleep(100);
@@ -423,7 +423,7 @@ async function runTests() {
     });
 
     await test('handles malformed JSON from client gracefully', async () => {
-      const ws = new WebSocket(`ws://localhost:${TEST_PORT}/?key=${TOKEN}`);
+      const ws = new WebSocket(wsUrl());
       await new Promise(resolve => ws.on('open', resolve));
 
       // Send invalid JSON — server should not crash
@@ -440,7 +440,7 @@ async function runTests() {
     console.log('\n--- File Watching ---');
 
     await test('sends reload on new .html file', async () => {
-      const ws = new WebSocket(`ws://localhost:${TEST_PORT}/?key=${TOKEN}`);
+      const ws = new WebSocket(wsUrl());
       await new Promise(resolve => ws.on('open', resolve));
 
       let gotReload = false;
@@ -460,7 +460,7 @@ async function runTests() {
       fs.writeFileSync(filePath, '<h2>Original</h2>');
       await sleep(500);
 
-      const ws = new WebSocket(`ws://localhost:${TEST_PORT}/?key=${TOKEN}`);
+      const ws = new WebSocket(wsUrl());
       await new Promise(resolve => ws.on('open', resolve));
 
       let gotReload = false;
@@ -476,7 +476,7 @@ async function runTests() {
     });
 
     await test('does NOT send reload for non-.html files', async () => {
-      const ws = new WebSocket(`ws://localhost:${TEST_PORT}/?key=${TOKEN}`);
+      const ws = new WebSocket(wsUrl());
       await new Promise(resolve => ws.on('open', resolve));
 
       let gotReload = false;
@@ -492,7 +492,7 @@ async function runTests() {
     });
 
     await test('does NOT send reload for ._*.html resource-fork dotfiles', async () => {
-      const ws = new WebSocket(`ws://localhost:${TEST_PORT}/?key=${TOKEN}`);
+      const ws = new WebSocket(wsUrl());
       await new Promise(resolve => ws.on('open', resolve));
 
       let gotReload = false;

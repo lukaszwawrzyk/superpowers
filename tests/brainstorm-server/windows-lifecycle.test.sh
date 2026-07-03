@@ -2,7 +2,7 @@
 # Windows lifecycle tests for the brainstorm server.
 #
 # Verifies brainstorm server lifecycle behavior, including:
-#  - Windows/MSYS2 foreground mode and empty OWNER_PID handling
+#  - foreground mode and empty OWNER_PID handling
 #  - Server survival past the 60-second lifecycle check window
 #  - Dead-at-startup OWNER_PID validation (logged, monitoring disabled)
 #  - Clean stop-server.sh shutdown
@@ -80,19 +80,12 @@ get_port_from_info() {
   grep -o '"port":[0-9]*' "$1/state/server-info" | head -1 | sed 's/"port"://'
 }
 
-get_key_from_info() {
-  grep -o '"url":"[^"]*key=[^"]*' "$1/state/server-info" | head -1 | sed 's/.*key=//'
-}
-
 http_check() {
   local port="$1"
-  local key="${2:-}"
-  node - "$port" "$key" <<'NODE'
+  node - "$port" <<'NODE'
     const http = require('http');
     const port = Number(process.argv[2]);
-    const key = process.argv[3] || '';
-    const path = key ? '/?key=' + encodeURIComponent(key) : '/';
-    http.get({ hostname: '127.0.0.1', port, path }, (res) => {
+    http.get({ hostname: '127.0.0.1', port, path: '/' }, (res) => {
       res.resume();
       process.exit(res.statusCode === 200 ? 0 : 1);
     }).on('error', () => process.exit(1));
@@ -189,37 +182,7 @@ else
   skip "start-server.sh passes empty BRAINSTORM_OWNER_PID" "not on Windows"
 fi
 
-# ========== Test 3: Auto-foreground detection on Windows ==========
-
-echo ""
-echo "--- Foreground Mode Detection ---"
-
-if [[ "$is_windows" == "true" ]]; then
-  FAKE_NODE_DIR="$TEST_DIR/fake-bin"
-  mkdir -p "$FAKE_NODE_DIR"
-  cat > "$FAKE_NODE_DIR/node" <<'FAKENODE'
-#!/usr/bin/env bash
-echo "FOREGROUND_MODE=true"
-exit 0
-FAKENODE
-  chmod +x "$FAKE_NODE_DIR/node"
-
-  # Run WITHOUT --foreground flag — Windows should auto-detect
-  captured=$(PATH="$FAKE_NODE_DIR:$PATH" bash "$START_SCRIPT" --project-dir "$TEST_DIR/session2" 2>/dev/null || true)
-
-  if echo "$captured" | grep -q "FOREGROUND_MODE=true"; then
-    pass "Windows auto-detects foreground mode"
-  else
-    fail "Windows auto-detects foreground mode" \
-         "Expected foreground code path, output: $captured"
-  fi
-
-  rm -rf "$FAKE_NODE_DIR" "$TEST_DIR/session2"
-else
-  skip "Windows auto-detects foreground mode" "not on Windows"
-fi
-
-# ========== Test 4: Server survives past 60-second lifecycle check ==========
+# ========== Test 3: Server survives past 60-second lifecycle check ==========
 
 echo ""
 echo "--- Server Survival (lifecycle check) ---"
@@ -244,7 +207,6 @@ else
   pass "Server starts successfully with empty OWNER_PID"
 
   SERVER_PORT=$(get_port_from_info "$TEST_DIR/survival")
-  SERVER_KEY=$(get_key_from_info "$TEST_DIR/survival")
 
   sleep 75
 
@@ -255,11 +217,11 @@ else
          "Server died. Log tail: $(tail -5 "$TEST_DIR/survival/.server.log" 2>/dev/null)"
   fi
 
-  if http_check "$SERVER_PORT" "$SERVER_KEY"; then
+  if http_check "$SERVER_PORT"; then
     pass "Server responds to HTTP after lifecycle check window"
   else
     fail "Server responds to HTTP after lifecycle check window" \
-         "Authenticated HTTP request to port $SERVER_PORT failed"
+         "HTTP request to port $SERVER_PORT failed"
   fi
 
   if grep -q "owner process exited" "$TEST_DIR/survival/.server.log" 2>/dev/null; then
@@ -274,7 +236,7 @@ else
   SERVER_PID=""
 fi
 
-# ========== Test 5: Dead-at-startup OWNER_PID is logged but does not kill the server ==========
+# ========== Test 4: Dead-at-startup OWNER_PID is logged but does not kill the server ==========
 #
 # The server validates BRAINSTORM_OWNER_PID at startup. If it's already dead,
 # the PID resolution was wrong (common on WSL, Tailscale SSH, cross-user
@@ -337,7 +299,7 @@ fi
 wait "$CONTROL_PID" 2>/dev/null || true
 CONTROL_PID=""
 
-# ========== Test 6: stop-server.sh cleanly stops the server ==========
+# ========== Test 5: stop-server.sh cleanly stops the server ==========
 
 echo ""
 echo "--- Clean Shutdown ---"

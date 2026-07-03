@@ -13,7 +13,6 @@ const SERVER_PATH = path.join(REPO_ROOT, 'skills/brainstorming/scripts/server.cj
 const PACKAGE_VERSION = JSON.parse(
   fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf-8')
 ).version;
-const TOKEN = 'testtoken-branding-0123456789abcdef';
 const ASSET_URL = 'https://primeradiant.com/brand/superpowers-visual-brainstorming-logo.png';
 
 function cleanup(dir) {
@@ -33,7 +32,6 @@ function startServer({ port, dir, env = {}, serverPath = SERVER_PATH }) {
       ...process.env,
       BRAINSTORM_PORT: String(port),
       BRAINSTORM_DIR: dir,
-      BRAINSTORM_TOKEN: TOKEN,
       ...env
     }
   });
@@ -59,8 +57,7 @@ function waitForServer(server) {
 
 function fetchHtml(port) {
   return new Promise((resolve, reject) => {
-    const headers = { Cookie: `brainstorm-key-${port}=${TOKEN}` };
-    http.get(`http://localhost:${port}/`, { headers }, (res) => {
+    http.get(`http://localhost:${port}/`, (res) => {
       let body = '';
       res.on('data', chunk => { body += chunk; });
       res.on('end', () => resolve(body));

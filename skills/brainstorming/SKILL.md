@@ -22,14 +22,13 @@ Every project goes through this process. A todo list, a single-function utility,
 You MUST create a task for each of these items and complete them in order:
 
 1. **Explore project context** — check files, docs, recent commits
-2. **Offer the visual companion just-in-time** — NOT upfront. The first time a question would genuinely be clearer shown than described, offer it then (its own message); on approval its browser tab opens for you. If no visual question ever arises, never offer it. See the Visual Companion section below.
-3. **Ask clarifying questions** — one at a time, understand purpose/constraints/success criteria
-4. **Choose the approach path** — present alternatives only when each is genuinely viable
-5. **Present design** — in sections scaled to their complexity, get user approval after each section
-6. **Write design doc** — save to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit
-7. **Spec self-review** — quick inline check for placeholders, contradictions, ambiguity, scope (see below)
-8. **User reviews written spec** — ask user to review the spec file before proceeding
-9. **Transition to implementation** — invoke writing-plans skill to create implementation plan
+2. **Ask clarifying questions** — one at a time, understand purpose/constraints/success criteria
+3. **Choose the approach path** — present alternatives only when each is genuinely viable
+4. **Present design** — in sections scaled to their complexity, get user approval after each section
+5. **Write design doc** — save to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit
+6. **Spec self-review** — quick inline check for placeholders, contradictions, ambiguity, scope (see below)
+7. **User reviews written spec** — ask user to review the spec file before proceeding
+8. **Transition to implementation** — invoke writing-plans skill to create implementation plan
 
 ## Process Flow
 
@@ -148,19 +147,32 @@ Wait for the user's response. If they request changes, make them and re-run the 
 
 ## Visual Companion
 
-A browser-based companion for showing mockups, diagrams, and visual options during brainstorming. Available as a tool — not a mode. Accepting the companion means it's available for questions that benefit from visual treatment; it does NOT mean every question goes through the browser.
+A browser-based companion can show concrete mockups, diagrams, and visual
+options during brainstorming. Do not offer or start it at the beginning of
+brainstorming just because visual work might happen later.
 
-**Offering the companion (just-in-time):** Do NOT offer it upfront. Wait until a question would genuinely be clearer shown than told — a real mockup / layout / diagram question, not merely a UI *topic*. The first time that happens, offer it then, as its own message:
-> "This next part might be easier if I show you — I can put together mockups, diagrams, and comparisons in a browser tab as we go. It's still new and can be token-intensive. Want me to? I'll open it for you."
+Use terminal conversation by default. Ask text questions in the terminal. Only
+offer the companion when you have a specific visual artifact ready to show, or
+when the next question genuinely needs visual comparison to answer well.
 
-**This offer MUST be its own message.** Only the offer — no clarifying question, summary, or other content. Wait for the user's response. If they accept, start the server with `--open` so their browser opens to the first screen automatically. If they decline, continue text-only and don't offer again unless they raise it.
+Before offering it, apply this test: **would the user understand or decide this
+better by seeing it than by reading it?**
 
-**Per-question decision:** Even after the user accepts, decide FOR EACH QUESTION whether to use the browser or the terminal. The test: **would the user understand this better by seeing it than reading it?**
+- **Use the browser** for visual content: mockups, wireframes, layout
+  comparisons, architecture diagrams, side-by-side visual designs, visual
+  hierarchy, spacing, and design polish.
+- **Use the terminal** for text content: requirements, scope, concepts,
+  tradeoffs, API/data decisions, A/B/C choices described in words, and ordinary
+  clarifying questions.
 
-- **Use the browser** for content that IS visual — mockups, wireframes, layout comparisons, architecture diagrams, side-by-side visual designs
-- **Use the terminal** for content that is text — requirements questions, conceptual choices, tradeoff lists, A/B/C/D text options, scope decisions
+A question about a UI topic is not automatically visual. "What kind of wizard
+do you want?" is a text question. "Which of these wizard layouts works better?"
+is a visual question.
 
-A question about a UI topic is not automatically a visual question. "What does personality mean in this context?" is a conceptual question — use the terminal. "Which wizard layout works better?" is a visual question — use the browser.
+When you do offer the companion, make it concrete:
+> "I have a visual comparison/mockup/diagram ready for this next question. Want
+> me to open the browser companion so you can inspect it? (Requires opening a
+> local URL)"
 
-If they agree to the companion, read the detailed guide before proceeding:
+If they agree, read the detailed guide before proceeding:
 `skills/brainstorming/visual-companion.md`

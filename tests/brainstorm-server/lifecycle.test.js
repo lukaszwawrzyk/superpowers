@@ -66,18 +66,6 @@ function openCaptureCommand(dir, marker) {
   return `node ${JSON.stringify(scriptPath)} ${JSON.stringify(markerPath)}`;
 }
 
-function httpStatus(port, key) {
-  return new Promise(resolve => {
-    const pathWithKey = key ? '/?key=' + encodeURIComponent(key) : '/';
-    require('http')
-      .get({ hostname: '127.0.0.1', port, path: pathWithKey }, res => {
-        res.resume();
-        resolve(res.statusCode);
-      })
-      .on('error', () => resolve(0));
-  });
-}
-
 function isWindowsLikeShell() {
   return process.platform === 'win32' ||
     /^msys|^cygwin|^mingw/i.test(process.env.OSTYPE || '') ||
@@ -143,12 +131,12 @@ async function runTests() {
 
   await test('idle shutdown closes an open WebSocket and the process exits', async () => {
     const dir = fs.mkdtempSync('/tmp/bs-life-');
-    const srv = spawn('node', [SERVER], { env: { ...process.env, BRAINSTORM_PORT: 3402, BRAINSTORM_DIR: dir, BRAINSTORM_TOKEN: 'lifetoken', BRAINSTORM_IDLE_TIMEOUT_MS: 200, BRAINSTORM_LIFECYCLE_CHECK_MS: 100 } });
+    const srv = spawn('node', [SERVER], { env: { ...process.env, BRAINSTORM_PORT: 3402, BRAINSTORM_DIR: dir, BRAINSTORM_IDLE_TIMEOUT_MS: 200, BRAINSTORM_LIFECYCLE_CHECK_MS: 100 } });
     let out = ''; srv.stdout.on('data', d => out += d.toString());
     let exited = false, code = null; srv.on('exit', c => { exited = true; code = c; });
     for (let i = 0; i < 60 && !out.includes('server-started'); i++) await sleep(50);
 
-    const ws = new WebSocket('ws://localhost:3402/?key=lifetoken');
+    const ws = new WebSocket('ws://localhost:3402/');
     await new Promise((res, rej) => { ws.on('open', res); ws.on('error', rej); });
 
     // 200ms idle, checked every 100ms — should shut down and exit well within 4s,
@@ -198,7 +186,6 @@ async function runTests() {
         BRAINSTORM_PORT: 3421,
         BRAINSTORM_HOST: '127.0.0.1',
         BRAINSTORM_URL_HOST: '::1',
-        BRAINSTORM_TOKEN: 'ipv6token',
         BRAINSTORM_DIR: dir,
         BRAINSTORM_LIFECYCLE_CHECK_MS: 100000
       }
@@ -207,25 +194,23 @@ async function runTests() {
     try {
       for (let i = 0; i < 60 && !out.includes('server-started'); i++) await sleep(50);
       const info = firstServerStarted(out);
-      assert.strictEqual(info.url, 'http://[::1]:3421/?key=ipv6token');
+      assert.strictEqual(info.url, 'http://[::1]:3421/');
     } finally {
       await killAndWait(srv);
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  await test('persists the bound port AND key, and restores both on restart', async () => {
+  await test('persists the bound port and restores it on restart', async () => {
     const dir = fs.mkdtempSync('/tmp/bs-port-');
     const portFile = path.join(dir, '.last-port');
-    const tokenFile = path.join(dir, '.last-token');
-    const env = { ...process.env, BRAINSTORM_PORT_FILE: portFile, BRAINSTORM_TOKEN_FILE: tokenFile, BRAINSTORM_LIFECYCLE_CHECK_MS: 100000 };
+    const env = { ...process.env, BRAINSTORM_PORT_FILE: portFile, BRAINSTORM_LIFECYCLE_CHECK_MS: 100000 };
 
     const a = spawn('node', [SERVER], { env: { ...env, BRAINSTORM_DIR: path.join(dir, 's1') } });
     let outA = ''; a.stdout.on('data', d => outA += d.toString());
     for (let i = 0; i < 60 && !outA.includes('server-started'); i++) await sleep(50);
     const infoA = firstServerStarted(outA);
-    const keyA = new URL(infoA.url).searchParams.get('key');
-    assert(fs.existsSync(portFile) && fs.existsSync(tokenFile), 'should write the port and token files');
+    assert(fs.existsSync(portFile), 'should write the port file');
     const exitedA = waitForExit(a);
     a.kill();
     assert(await exitedA, 'first server should exit before restart binds its port');
@@ -234,55 +219,16 @@ async function runTests() {
     let outB = ''; b.stdout.on('data', d => outB += d.toString());
     for (let i = 0; i < 60 && !outB.includes('server-started'); i++) await sleep(50);
     const infoB = firstServerStarted(outB);
-    const keyB = new URL(infoB.url).searchParams.get('key');
     await killAndWait(b);
     fs.rmSync(dir, { recursive: true, force: true });
 
     assert.strictEqual(infoB.port, infoA.port, 'restart should reuse the same port');
-    // Same key too — otherwise the open tab's cookie would 403 against the restart.
-    assert.strictEqual(keyB, keyA, 'restart should reuse the same session key');
   });
 
-  await test('hardens existing persisted token file permissions', async () => {
-    const dir = fs.mkdtempSync('/tmp/bs-token-mode-');
-    const portFile = path.join(dir, '.last-port');
-    const tokenFile = path.join(dir, '.last-token');
-    const token = 'efefefefefefefefefefefefefefefef';
-    let srv = null;
-
-    try {
-      fs.writeFileSync(tokenFile, token, { mode: 0o644 });
-      fs.chmodSync(tokenFile, 0o644);
-      srv = spawn('node', [SERVER], {
-        env: {
-          ...process.env,
-          BRAINSTORM_DIR: path.join(dir, 's1'),
-          BRAINSTORM_PORT_FILE: portFile,
-          BRAINSTORM_TOKEN_FILE: tokenFile,
-          BRAINSTORM_LIFECYCLE_CHECK_MS: 100000
-        }
-      });
-      let out = ''; srv.stdout.on('data', d => out += d.toString());
-      for (let i = 0; i < 60 && !out.includes('server-started'); i++) await sleep(50);
-      assert(out.includes('server-started'), 'server should start with persisted token');
-
-      if (process.platform !== 'win32') {
-        const mode = fs.statSync(tokenFile).mode & 0o777;
-        assert.strictEqual(mode, 0o600, `.last-token mode should be 0600, got ${mode.toString(8)}`);
-      } else {
-        assert(fs.existsSync(tokenFile), 'token file should remain present on Windows');
-      }
-    } finally {
-      await killAndWait(srv);
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  await test('stored key can authenticate WebSocket after same-port restart', async () => {
+  await test('WebSocket opens after same-port restart', async () => {
     const dir = fs.mkdtempSync('/tmp/bs-reconnect-');
     const portFile = path.join(dir, '.last-port');
-    const tokenFile = path.join(dir, '.last-token');
-    const env = { ...process.env, BRAINSTORM_PORT_FILE: portFile, BRAINSTORM_TOKEN_FILE: tokenFile, BRAINSTORM_LIFECYCLE_CHECK_MS: 100000 };
+    const env = { ...process.env, BRAINSTORM_PORT_FILE: portFile, BRAINSTORM_LIFECYCLE_CHECK_MS: 100000 };
     let a = null, b = null, ws = null;
 
     try {
@@ -290,7 +236,6 @@ async function runTests() {
       let outA = ''; a.stdout.on('data', d => outA += d.toString());
       for (let i = 0; i < 60 && !outA.includes('server-started'); i++) await sleep(50);
       const infoA = firstServerStarted(outA);
-      const keyA = new URL(infoA.url).searchParams.get('key');
       const exitedA = waitForExit(a);
       a.kill();
       assert(await exitedA, 'first server should exit before restart binds its port');
@@ -301,9 +246,7 @@ async function runTests() {
       for (let i = 0; i < 60 && !outB.includes('server-started'); i++) await sleep(50);
       const infoB = firstServerStarted(outB);
 
-      ws = new WebSocket(`ws://localhost:${infoB.port}/?key=${keyA}`, {
-        headers: { Origin: `http://localhost:${infoB.port}` }
-      });
+      ws = new WebSocket(`ws://localhost:${infoB.port}/`);
       const opened = await new Promise(resolve => {
         ws.on('open', () => resolve(true));
         ws.on('error', () => resolve(false));
@@ -311,7 +254,7 @@ async function runTests() {
       });
 
       assert.strictEqual(infoB.port, infoA.port, 'restart should reuse same port');
-      assert(opened, 'stored key should authenticate WS after restart');
+      assert(opened, 'WebSocket should open after restart');
     } finally {
       try { if (ws) ws.close(); } catch (e) {}
       await killAndWait(a);
@@ -346,104 +289,6 @@ async function runTests() {
     assert.strictEqual(persisted, '3415', 'fallback must not overwrite .last-port');
   });
 
-  await test('fallback with persisted token generates a fresh unpersisted key', async () => {
-    const dir = fs.mkdtempSync('/tmp/bs-port-');
-    const portFile = path.join(dir, '.last-port');
-    const tokenFile = path.join(dir, '.last-token');
-    const preferredToken = 'abababababababababababababababab';
-    let a = null, b = null;
-
-    try {
-      a = spawn('node', [SERVER], {
-        env: {
-          ...process.env,
-          BRAINSTORM_DIR: path.join(dir, 'a'),
-          BRAINSTORM_PORT: 3422,
-          BRAINSTORM_TOKEN: preferredToken,
-          BRAINSTORM_LIFECYCLE_CHECK_MS: 100000
-        }
-      });
-      let outA = ''; a.stdout.on('data', d => outA += d.toString());
-      for (let i = 0; i < 60 && !outA.includes('server-started'); i++) await sleep(50);
-      assert(outA.includes('server-started'), 'preferred-port server should start');
-
-      fs.writeFileSync(portFile, '3422');
-      fs.writeFileSync(tokenFile, preferredToken, { mode: 0o600 });
-
-      b = spawn('node', [SERVER], {
-        env: {
-          ...process.env,
-          BRAINSTORM_DIR: path.join(dir, 'b'),
-          BRAINSTORM_PORT_FILE: portFile,
-          BRAINSTORM_TOKEN_FILE: tokenFile,
-          BRAINSTORM_LIFECYCLE_CHECK_MS: 100000
-        }
-      });
-      let outB = ''; b.stdout.on('data', d => outB += d.toString());
-      for (let i = 0; i < 60 && !outB.includes('server-started'); i++) await sleep(50);
-      const infoB = firstServerStarted(outB);
-      const fallbackKey = new URL(infoB.url).searchParams.get('key');
-      const persistedAfter = fs.readFileSync(tokenFile, 'utf8').trim();
-      const originalStatus = await httpStatus(3422, fallbackKey);
-
-      assert.notStrictEqual(infoB.port, 3422, 'fallback should use a different port');
-      assert.notStrictEqual(fallbackKey, preferredToken, 'fallback must not reuse persisted key');
-      assert.strictEqual(persistedAfter, preferredToken, 'fallback must not overwrite .last-token');
-      assert.strictEqual(originalStatus, 403, 'fallback key must not authenticate to original server');
-    } finally {
-      await killAndWait(a);
-      await killAndWait(b);
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  await test('fallback with explicit BRAINSTORM_TOKEN fails closed', async () => {
-    const dir = fs.mkdtempSync('/tmp/bs-port-');
-    const portFile = path.join(dir, '.last-port');
-    const explicitToken = 'cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd';
-    let a = null, b = null;
-
-    try {
-      a = spawn('node', [SERVER], {
-        env: {
-          ...process.env,
-          BRAINSTORM_DIR: path.join(dir, 'a'),
-          BRAINSTORM_PORT: 3423,
-          BRAINSTORM_TOKEN: explicitToken,
-          BRAINSTORM_LIFECYCLE_CHECK_MS: 100000
-        }
-      });
-      let outA = ''; a.stdout.on('data', d => outA += d.toString());
-      for (let i = 0; i < 60 && !outA.includes('server-started'); i++) await sleep(50);
-      assert(outA.includes('server-started'), 'preferred-port server should start');
-
-      fs.writeFileSync(portFile, '3423');
-      b = spawn('node', [SERVER], {
-        env: {
-          ...process.env,
-          BRAINSTORM_DIR: path.join(dir, 'b'),
-          BRAINSTORM_PORT_FILE: portFile,
-          BRAINSTORM_TOKEN: explicitToken,
-          BRAINSTORM_LIFECYCLE_CHECK_MS: 100000
-        }
-      });
-      let outB = ''; let errB = '';
-      b.stdout.on('data', d => outB += d.toString());
-      b.stderr.on('data', d => errB += d.toString());
-      for (let i = 0; i < 60 && !outB.includes('server-started') && b.exitCode === null; i++) await sleep(50);
-      const exited = await waitForExit(b, 1500);
-
-      assert(exited, 'explicit-token fallback process should exit');
-      assert.notStrictEqual(b.exitCode, 0, 'explicit-token fallback should fail non-zero');
-      assert(!outB.includes('server-started'), 'explicit-token fallback must not start on a random port');
-      assert(/BRAINSTORM_TOKEN/.test(errB), `stderr should explain explicit token fallback refusal, got: ${errB}`);
-    } finally {
-      await killAndWait(a);
-      await killAndWait(b);
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
   await test('auto-opens the browser once, on the first screen', async () => {
     const dir = fs.mkdtempSync('/tmp/bs-open-');
     const marker = path.join(dir, 'opened.log');
@@ -460,7 +305,7 @@ async function runTests() {
     await sleep(700);
 
     const lines = fs.existsSync(marker) ? fs.readFileSync(marker, 'utf8').trim().split('\n').filter(Boolean) : [];
-    // The opened URL must carry the key AND be reachable — a keyless URL hits 403.
+    // The opened URL is the plain companion URL and should be reachable.
     let status = 0;
     if (lines[0]) {
       status = await new Promise(r => require('http').get(lines[0], res => { res.resume(); r(res.statusCode); }).on('error', () => r(0)));
@@ -470,8 +315,8 @@ async function runTests() {
 
     assert.strictEqual(lines.length, 1, 'should open exactly once');
     assert(lines[0].includes('3417'), `should open the server URL, got: ${lines[0]}`);
-    assert(/[?&]key=/.test(lines[0]), `opened URL must carry the session key, got: ${lines[0]}`);
-    assert.strictEqual(status, 200, 'the opened URL must be reachable (valid key), not the 403 page');
+    assert(!/[?&]key=/.test(lines[0]), `opened URL should not carry a key query, got: ${lines[0]}`);
+    assert.strictEqual(status, 200, 'the opened URL must be reachable');
   });
 
   await test('does NOT auto-open unless approved (BRAINSTORM_OPEN unset)', async () => {
@@ -488,24 +333,6 @@ async function runTests() {
     const opened = fs.existsSync(marker);
     fs.rmSync(dir, { recursive: true, force: true });
     assert(!opened, 'must not open the browser without explicit approval');
-  });
-
-  await test('unauthenticated requests do not defeat the idle timeout', async () => {
-    const dir = fs.mkdtempSync('/tmp/bs-life-');
-    const srv = spawn('node', [SERVER], { env: { ...process.env, BRAINSTORM_PORT: 3419, BRAINSTORM_DIR: dir, BRAINSTORM_TOKEN: 'authtok', BRAINSTORM_IDLE_TIMEOUT_MS: 400, BRAINSTORM_LIFECYCLE_CHECK_MS: 100 } });
-    let out = ''; srv.stdout.on('data', d => out += d.toString());
-    let exited = false; srv.on('exit', () => { exited = true; });
-    for (let i = 0; i < 60 && !out.includes('server-started'); i++) await sleep(50);
-
-    // Flood with UNAUTHENTICATED (keyless → 403) requests. These must NOT count
-    // as activity, so the idle timeout still fires and the process exits.
-    const hammer = setInterval(() => { require('http').get('http://localhost:3419/', r => r.resume()).on('error', () => {}); }, 60);
-    for (let i = 0; i < 40 && !exited; i++) await sleep(100);
-    clearInterval(hammer);
-    if (!exited) await killAndWait(srv);
-    fs.rmSync(dir, { recursive: true, force: true });
-
-    assert(exited, 'idle shutdown must still fire despite a flood of unauthenticated requests');
   });
 
   console.log(`\n--- Results: ${passed} passed, ${failed} failed ---`);
