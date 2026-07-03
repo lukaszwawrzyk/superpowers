@@ -23,6 +23,11 @@ This is not negotiable. You cannot rationalize your way out of this.
 
 Then announce "Using [skill] to [purpose]" and follow the skill exactly. If it has a checklist, create a todo per item.
 
+Some skills are rigid process gates; others are contextual guidance. Follow
+rigid skills exactly when they apply. For contextual skills such as TDD,
+planning, and review, apply the discipline at an intensity that matches the
+task's risk, scope, and explicit user instructions.
+
 ## Skill Priority
 
 When multiple skills apply, process skills come first — they set the approach, then implementation skills (frontend-design, etc.) carry it out. Brainstorming and systematic-debugging are Superpowers' most common process skills, but the rule holds for any of them.

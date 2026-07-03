@@ -62,7 +62,7 @@ Subagent (general-purpose):
 
     **Production readiness:**
     - Migration strategy if schema changed?
-    - Backward compatibility considered?
+    - Backward compatibility preserved only for migration requirements or user requests?
     - Documentation complete?
     - No obvious bugs?
 
