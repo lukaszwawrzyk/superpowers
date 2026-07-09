@@ -1,25 +1,38 @@
 ---
 name: brainstorming
-description: "You MUST use this before any creative work - creating features, building components, adding functionality, or modifying behavior. Explores user intent, requirements and design before implementation."
+description: "Use when a feature, design, or behavior change needs collaborative exploration before implementation; skip for small, obvious fixes or precisely specified changes."
 ---
 
 # Brainstorming Ideas Into Designs
 
 Help turn ideas into fully formed designs and specs through natural collaborative dialogue.
 
-Start by understanding the current project context, then ask questions one at a time to refine the idea. Once you understand what you're building, present the design and get user approval.
+Start by classifying the request. If it is small, clear, and has one coherent implementation path, do it directly. Otherwise, understand the current project context, ask questions one at a time to refine the idea, then present the design and get user approval.
 
 <HARD-GATE>
-Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until you have presented a design and the user has approved it. This applies to EVERY project regardless of perceived simplicity.
+For requests that need brainstorming, do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until you have presented a design and the user has approved it.
 </HARD-GATE>
 
-## Anti-Pattern: "This Is Too Simple To Need A Design"
+## Fast Path: Small Clear Requests
 
-Every project goes through this process. A todo list, a single-function utility, a config change — all of them. "Simple" projects are where unexamined assumptions cause the most wasted work. The design can be short (a few sentences for truly simple projects), but you MUST present it and get approval.
+Skip brainstorming and implement directly when ALL of these are true:
 
-## Checklist
+- The user's desired outcome is precise and unambiguous
+- There is one clear, coherent solution that matches the request
+- The change is small: a localized bug fix, copy/config tweak, tiny behavior adjustment, or straightforward implementation
+- You can verify the result with the project's normal lightweight checks
 
-You MUST create a task for each of these items and complete them in order:
+Do not stop to restate the obvious plan. Briefly say what you are changing, make the change, and verify it. Use other relevant skills if they apply, such as systematic-debugging for a non-obvious bug or test-driven-development when a regression test is worthwhile.
+
+Examples:
+- "Fix the typo in the empty state" -> edit it
+- "Make this button disabled while saving" -> implement the local state change
+- "This endpoint returns 500 because the field name is wrong" -> verify, fix, test
+- "Add the missing env var to this config" -> update the config
+
+## Checklist For Brainstorming Requests
+
+When the request does not qualify for the fast path, create a task for each of these items and complete them in order:
 
 1. **Explore project context** — check files, docs, recent commits
 2. **Ask clarifying questions** — one at a time, understand purpose/constraints/success criteria
